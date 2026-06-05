@@ -1,0 +1,29 @@
+# Per-Dockerfile ignore (BuildKit). Patterns are evaluated against the build
+# context, which is the repository root (see docker-compose.yml `context:`).
+# Keeps the context small and reproducible — host build outputs are never
+# shipped into the image; the build stage recompiles everything from source.
+
+# Build outputs
+**/target/
+**/build/
+**/dist/
+**/.flattened-pom.xml
+**/dependency-reduced-pom.xml
+
+# Frontend deps (the build reinstalls them inside the image)
+**/node_modules/
+
+# VCS / CI
+.git/
+.github/
+
+# IDE / editor / OS noise
+.idea/
+.vscode/
+**/*.iml
+**/.DS_Store
+
+# Agent / tooling local state
+.claude/
+**/logs/
+docs/_build/

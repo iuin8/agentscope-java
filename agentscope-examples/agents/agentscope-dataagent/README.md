@@ -238,6 +238,27 @@ Open **http://localhost:8080** and log in. The H2 demo seed creates two demo
 accounts: `bob` / `bob` and `alice` / `alice`. The first user with
 `ROLE_ADMIN` is also seeded — check the startup banner.
 
+### 5. Docker one-click deploy
+
+No local JDK / Node needed — the image's multi-stage build compiles both the
+backend and the React SPA:
+
+```bash
+cp .env.example .env          # set DASHSCOPE_API_KEY (optional; boots without it, but chat is disabled)
+docker compose up -d --build  # run from this module directory
+```
+
+Open **http://localhost:8080** (same demo accounts). All state (per-user
+workspace, the auto-generated `agentscope.json`, the embedded H2 DB) persists
+in the `dataagent-data` volume, so restarts keep everything.
+
+> The build context is the repo root (this module depends on sibling reactor
+> modules that are not published to a remote repository); `docker-compose.yml`
+> handles that with `context: ../../..`. Override `DATAAGENT_JWT_SECRET` in
+> `.env` for any non-local deployment. For a clustered MySQL + Redis
+> multi-replica setup, see [`docs/cluster-deploy.md`](docs/cluster-deploy.md) —
+> it reuses the `agentscope/dataagent:latest` image this file builds.
+
 ---
 
 ## Configuration reference (`application.yml`)

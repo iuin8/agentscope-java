@@ -1,0 +1,4 @@
+# Local Docker deployment env — may hold secrets (DASHSCOPE_API_KEY, JWT secret).
+# The committed template is .env.example; the working copy stays local.
+.env
+!.env.example

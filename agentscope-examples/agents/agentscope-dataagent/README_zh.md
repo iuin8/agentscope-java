@@ -184,6 +184,20 @@ java -jar target/agentscope-dataagent-*-exec.jar
 
 打开 **http://localhost:8080** 登录。H2 demo 种子会创建两个 demo 账号：`bob` / `bob` 与 `alice` / `alice`。第一个 `ROLE_ADMIN` 用户也会种入 —— 看启动 banner。
 
+### 5. Docker 一键部署
+
+无需本地装 JDK / Node —— 镜像在多阶段构建里同时编译后端与前端 SPA：
+
+```bash
+cp .env.example .env          # 填入 DASHSCOPE_API_KEY（可选，不填也能启动，但聊天不可用）
+docker compose up -d --build  # 在本模块目录执行
+```
+
+打开 **http://localhost:8080**（demo 账号同上）。所有状态（per-用户工作区、自动生成的 `agentscope.json`、内嵌 H2 库）都持久化在 `dataagent-data` 卷里，重启不丢。
+
+> 构建上下文是仓库根（本模块依赖未发布到远端仓库的兄弟模块），`docker-compose.yml` 已用 `context: ../../..` 处理。
+> 生产环境记得在 `.env` 里覆盖 `DATAAGENT_JWT_SECRET`。需要 MySQL + Redis 多副本集群时，见 [`docs/cluster-deploy.md`](docs/cluster-deploy.md) —— 它复用本文件构建出的 `agentscope/dataagent:latest` 镜像。
+
 ---
 
 ## 配置参考（`application.yml`）
