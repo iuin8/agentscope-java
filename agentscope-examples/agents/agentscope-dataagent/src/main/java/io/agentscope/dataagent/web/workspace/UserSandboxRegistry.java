@@ -230,6 +230,13 @@ public final class UserSandboxRegistry {
 
     private Sandbox createAndStart(Key key) {
         DockerSandboxClientOptions options = new DockerSandboxClientOptions();
+        // Persist this (userId, agentId) workspace in a dedicated Docker named volume mounted at
+        // the sandbox workspace root, so user-created skills / sessions / memory survive sandbox
+        // idle-eviction and app restarts. The volume is managed by the host daemon (reachable via
+        // the bind-mounted docker.sock) and is NOT removed by `docker rm` on container recycle;
+        // only an explicit `docker volume rm` discards it.
+        String volume = workspaceVolumeName(key);
+        options.additionalRunArgs("-v", volume + ":" + options.getWorkspaceRoot());
         WorkspaceSpec ws = buildWorkspaceSpec(key);
         Sandbox sandbox = client.create(ws, new NoopSnapshotSpec(), options);
         try {
@@ -248,6 +255,21 @@ public final class UserSandboxRegistry {
         }
         log.info("[sandbox-registry] started sandbox for {}", key);
         return sandbox;
+    }
+
+    /**
+     * Stable Docker named-volume name for a {@code (userId, agentId)} pair. Docker volume names
+     * must match {@code [a-zA-Z0-9][a-zA-Z0-9_.-]*}; non-conforming characters are replaced and a
+     * short hash of the raw key is appended so distinct keys stay distinct after sanitisation.
+     */
+    private static String workspaceVolumeName(Key key) {
+        String raw = key.userId() + "__" + key.agentId();
+        String safe = raw.replaceAll("[^a-zA-Z0-9_.-]", "-");
+        if (safe.length() > 180) {
+            safe = safe.substring(0, 180);
+        }
+        String hash = Integer.toHexString((key.userId() + "/" + key.agentId()).hashCode());
+        return "dataagent-ws-" + safe + "-" + hash;
     }
 
     /**

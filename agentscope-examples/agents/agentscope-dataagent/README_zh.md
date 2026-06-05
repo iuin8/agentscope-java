@@ -193,7 +193,7 @@ cp .env.example .env          # 填入 DASHSCOPE_API_KEY（可选，不填也能
 docker compose up -d --build  # 在本模块目录执行
 ```
 
-打开 **http://localhost:8080**（demo 账号同上）。所有状态（per-用户工作区、自动生成的 `agentscope.json`、内嵌 H2 库）都持久化在 `dataagent-data` 卷里，重启不丢。
+打开 **http://localhost:8080**（demo 账号同上）。H2 catalog（账号、agent、贡献记录）、自动生成的 `agentscope.json` 与共享市场内容持久化在 `dataagent-data` 卷里。每个 per-用户工作区挂在各自的 `dataagent-ws-*` Docker 卷上，用户新建的 skill / 会话 / memory 能扛住 sandbox 空闲回收。但**整个应用重启**目前会起一份全新的 per-用户工作区（per-user agent 运行时 id 每次启动重新生成——上游 [#1632](https://github.com/agentscope-ai/agentscope-java/issues/1632)）；旧的 `dataagent-ws-*` 卷会遗留，可用 `docker volume ls --filter name=dataagent-ws -q | xargs docker volume rm` 清理。
 
 > 构建上下文是仓库根（本模块依赖未发布到远端仓库的兄弟模块），`docker-compose.yml` 已用 `context: ../../..` 处理。
 > 生产环境记得在 `.env` 里覆盖 `DATAAGENT_JWT_SECRET`。需要 MySQL + Redis 多副本集群时，见 [`docs/cluster-deploy.md`](docs/cluster-deploy.md) —— 它复用本文件构建出的 `agentscope/dataagent:latest` 镜像。

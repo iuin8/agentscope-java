@@ -11,12 +11,17 @@
 # privileges — only run this on a host you trust. The sandbox image is
 # `ubuntu:22.04`; the host daemon pulls it on first use (needs network).
 #
-# Persistence: the embedded H2 catalog (accounts, agents, contributions) and the
-# auto-generated agentscope.json + shared marketplace content live in the
-# `dataagent-data` volume and survive restarts. Per-user *live workspace* state
-# (sessions, scratch files) lives inside the ephemeral sandbox containers and is
-# NOT persisted across sandbox idle-eviction / restart in this single-node setup
-# (that needs a real snapshotSpec + distributed backend — see docs/cluster-deploy.md).
+# Persistence:
+#  - The embedded H2 catalog (accounts, agents, contributions) + auto-generated
+#    agentscope.json + shared marketplace content live in the `dataagent-data`
+#    volume and survive restarts.
+#  - Each per-(user, agent) workspace is mounted on a dedicated Docker named
+#    volume (`dataagent-ws-*`), so user-created skills / sessions / memory
+#    survive sandbox idle-eviction. NOTE: a full app restart currently starts a
+#    fresh workspace because the per-user agent runtime id is regenerated each
+#    boot (upstream agentscope-ai/agentscope-java#1632); the old `dataagent-ws-*`
+#    volumes are left behind — prune with
+#    `docker volume ls --filter name=dataagent-ws -q | xargs docker volume rm`.
 #
 # For a clustered MySQL + Redis + multi-replica deployment, see
 # docs/cluster-deploy.md — it reuses the `agentscope/dataagent:latest` image

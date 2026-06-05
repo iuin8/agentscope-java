@@ -248,9 +248,16 @@ cp .env.example .env          # set DASHSCOPE_API_KEY (optional; boots without i
 docker compose up -d --build  # run from this module directory
 ```
 
-Open **http://localhost:8080** (same demo accounts). All state (per-user
-workspace, the auto-generated `agentscope.json`, the embedded H2 DB) persists
-in the `dataagent-data` volume, so restarts keep everything.
+Open **http://localhost:8080** (same demo accounts). The H2 catalog (accounts,
+agents, contributions), the auto-generated `agentscope.json`, and shared
+marketplace content persist in the `dataagent-data` volume. Each per-user
+workspace is mounted on its own `dataagent-ws-*` Docker volume, so user-created
+skills / sessions / memory survive sandbox idle-eviction. A full app **restart**
+currently starts a fresh per-user workspace (the agent runtime id is regenerated
+each boot — upstream
+[#1632](https://github.com/agentscope-ai/agentscope-java/issues/1632)); the old
+`dataagent-ws-*` volumes are left behind and can be pruned with
+`docker volume ls --filter name=dataagent-ws -q | xargs docker volume rm`.
 
 > The build context is the repo root (this module depends on sibling reactor
 > modules that are not published to a remote repository); `docker-compose.yml`
