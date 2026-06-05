@@ -34,6 +34,7 @@ import io.agentscope.dataagent.web.workspace.UserSandboxRegistry;
 import io.agentscope.harness.agent.IsolationScope;
 import io.agentscope.harness.agent.filesystem.spec.DockerFilesystemSpec;
 import io.agentscope.harness.agent.sandbox.SandboxClient;
+import io.agentscope.harness.agent.sandbox.SandboxDistributedOptions;
 import io.agentscope.harness.agent.sandbox.impl.docker.DockerSandboxClientOptions;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -209,6 +210,14 @@ public class DataAgentConfig {
                             new DockerFilesystemSpec()
                                     .client(sandboxClient)
                                     .isolationScope(IsolationScope.USER));
+                    // Single-node opt-out: the per-user workspace is a live Docker sandbox
+                    // reached through the in-memory UserSandboxRegistry under sticky routing,
+                    // not rehydrated from a snapshot. Without this, HarnessAgent.build()
+                    // rejects the default NoopSnapshotSpec and the bootstrap fails to start.
+                    // HA deployments should instead provide a real snapshotSpec + distributed
+                    // Session and drop this opt-out.
+                    b.sandboxDistributed(
+                            SandboxDistributedOptions.builder().requireDistributed(false).build());
                 });
 
         DataAgentBootstrap bootstrap = builder.build();

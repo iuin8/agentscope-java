@@ -15,6 +15,8 @@
  */
 package io.agentscope.dataagent.web.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
@@ -38,6 +40,17 @@ import org.springframework.web.reactive.function.server.ServerResponse;
  */
 @Configuration
 public class WebConfig {
+
+    /**
+     * Jackson 2 {@link ObjectMapper} bean. Spring Boot 4 auto-configures a Jackson 3
+     * ({@code tools.jackson}) mapper instead, so the classic {@code com.fasterxml.jackson.databind}
+     * {@code ObjectMapper} that {@code MarketContributionService} injects is not otherwise present.
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public ObjectMapper objectMapper() {
+        return new ObjectMapper();
+    }
 
     @Bean
     public RouterFunction<ServerResponse> spaFallback() {
