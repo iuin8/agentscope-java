@@ -23,8 +23,10 @@ import io.agentscope.dataagent.runtime.session.SessionAgentManager;
 import io.agentscope.dataagent.runtime.session.SessionEntry;
 import io.agentscope.dataagent.runtime.session.SessionKind;
 import io.agentscope.dataagent.web.catalog.AgentCatalogService;
+import io.agentscope.dataagent.web.catalog.AgentDefinition;
 import io.agentscope.dataagent.web.session.SessionReadStateStore;
 import io.agentscope.dataagent.web.session.SessionTurnParser;
+import io.agentscope.dataagent.web.workspace.WorkspaceManagerFactory;
 import io.agentscope.harness.agent.HarnessAgent;
 import io.agentscope.harness.agent.workspace.WorkspaceManager;
 import java.util.ArrayList;
@@ -68,15 +70,18 @@ public class SessionController {
     private final SessionAgentManager sessionAgentManager;
     private final SessionReadStateStore readStateStore;
     private final AgentCatalogService catalogService;
+    private final WorkspaceManagerFactory workspaceManagerFactory;
 
     public SessionController(
             DataAgentBootstrap builderBootstrap,
             SessionReadStateStore readStateStore,
-            AgentCatalogService catalogService) {
+            AgentCatalogService catalogService,
+            WorkspaceManagerFactory workspaceManagerFactory) {
         this.bootstrap = builderBootstrap;
         this.sessionAgentManager = builderBootstrap.gateway().sessionAgentManager();
         this.readStateStore = readStateStore;
         this.catalogService = catalogService;
+        this.workspaceManagerFactory = workspaceManagerFactory;
     }
 
     @GetMapping("/inbox")
@@ -301,29 +306,53 @@ public class SessionController {
         String gatewayAgentId = catalogService.peekGatewayAgentId(entry.userId(), urlAgentId);
         HarnessAgent ha =
                 gatewayAgentId != null ? bootstrap.gateway().findAgent(gatewayAgentId) : null;
-        if (ha != null) {
-            WorkspaceManager wm = ha.getWorkspaceManager();
-            String innerAgentId = ha.getName();
-            if (wm != null && innerAgentId != null && !innerAgentId.isBlank()) {
-                String relLog =
-                        "agents/" + innerAgentId + "/sessions/" + entry.sessionId() + ".log.jsonl";
-                String fromLog = wm.readManagedWorkspaceFileUtf8(RuntimeContext.empty(), relLog);
-                if (fromLog != null && !fromLog.isEmpty()) {
-                    return fromLog;
-                }
-                String relCtx =
-                        "agents/" + innerAgentId + "/sessions/" + entry.sessionId() + ".jsonl";
-                String fromCtx = wm.readManagedWorkspaceFileUtf8(RuntimeContext.empty(), relCtx);
-                if (fromCtx != null && !fromCtx.isEmpty()) {
-                    return fromCtx;
-                }
+        String innerAgentId = ha != null ? ha.getName() : null;
+        // Read through a WorkspaceManager backed by the borrowed per-(owner, agent) sandbox
+        // (UserSandboxRegistry), NOT the agent's own call-context-bound filesystem
+        // (ha.getWorkspaceManager()): out-of-band REST reads have no active sandbox call
+        // context, which otherwise throws "No active sandbox". Mirrors AgentWorkspaceController.
+        WorkspaceManager wm = borrowedWorkspaceManager(entry.userId(), urlAgentId);
+        if (wm != null && innerAgentId != null && !innerAgentId.isBlank()) {
+            String relLog =
+                    "agents/" + innerAgentId + "/sessions/" + entry.sessionId() + ".log.jsonl";
+            String fromLog = wm.readManagedWorkspaceFileUtf8(RuntimeContext.empty(), relLog);
+            if (fromLog != null && !fromLog.isEmpty()) {
+                return fromLog;
+            }
+            String relCtx = "agents/" + innerAgentId + "/sessions/" + entry.sessionId() + ".jsonl";
+            String fromCtx = wm.readManagedWorkspaceFileUtf8(RuntimeContext.empty(), relCtx);
+            if (fromCtx != null && !fromCtx.isEmpty()) {
+                return fromCtx;
             }
         }
-        HistoryResult raw = sessionAgentManager.history(entry.sessionKey(), 0);
-        if (raw == null || raw.error() != null) {
+        // Legacy fallback. Guarded: SessionAgentManager.history() also reads through the agent's
+        // call-context-bound filesystem, so it can throw when called outside a call context.
+        try {
+            HistoryResult raw = sessionAgentManager.history(entry.sessionKey(), 0);
+            if (raw == null || raw.error() != null) {
+                return "";
+            }
+            return raw.content() != null ? raw.content() : "";
+        } catch (RuntimeException ex) {
             return "";
         }
-        return raw.content() != null ? raw.content() : "";
+    }
+
+    /**
+     * Resolves a {@link WorkspaceManager} backed by the borrowed per-{@code (owner, agentId)} live
+     * sandbox, mirroring {@code AgentWorkspaceController#resolveContext}. Returns {@code null} when
+     * the agent is not visible to the user.
+     */
+    private WorkspaceManager borrowedWorkspaceManager(String userId, String urlAgentId) {
+        AgentDefinition def = catalogService.findVisible(userId, urlAgentId).orElse(null);
+        if (def == null) {
+            return null;
+        }
+        String ownerId =
+                AgentDefinition.SCOPE_USER.equals(def.scope()) && def.ownerId() != null
+                        ? def.ownerId()
+                        : userId;
+        return workspaceManagerFactory.forAgent(ownerId, urlAgentId, def.workspacePath());
     }
 
     // -----------------------------------------------------------------
